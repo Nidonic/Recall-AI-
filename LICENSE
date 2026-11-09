@@ -6,9 +6,19 @@ Recall AI, including its source code, object code, website, API, software develo
 tool, MCP server, plugins, documentation and related materials (the "Software"), is proprietary software
 owned by Nidonic Labs.
 
-No permission is granted to any person to copy, redistribute, modify, sublicense, or commercially exploit
-the Software, in whole or in part, without prior written authorization from Nidonic Labs. Any use of the
-Software not expressly authorized in writing by Nidonic Labs is prohibited.
+Except for the limited install license below, no permission is granted to any person to copy, redistribute,
+modify, sublicense, or commercially exploit the Software, in whole or in part, without prior written
+authorization from Nidonic Labs. Any use of the Software not expressly authorized in writing by Nidonic Labs
+is prohibited.
+
+Limited install license. Nidonic Labs grants you a non-exclusive, non-transferable, revocable license to
+download and install unmodified copies of (a) the Recall AI plugins from the official public repository at
+https://github.com/Nidonic/Recall-AI- and (b) the Recall AI command-line tool and software development kit
+from the official npm packages @recall-ai/cli and @recall-ai/sdk, on your own devices and servers, and to
+run them solely to access the Recall AI service at https://recallai.nidonic.online. This license does not
+permit you to modify, redistribute, sublicense, resell, or publish those copies, or to use them with any
+other service, and it grants no rights to any other part of the Software. It ends automatically if you
+breach these terms.
 
 Third-party components included in or used by the Software remain subject to their respective licenses.
 See THIRD-PARTY-NOTICES.md. Nothing in this license limits rights granted by those licenses.
