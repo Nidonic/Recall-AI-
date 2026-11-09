@@ -1,0 +1,13 @@
+{
+  "name": "recall-ai",
+  "owner": {
+    "name": "Nidonic Labs"
+  },
+  "plugins": [
+    {
+      "name": "recall",
+      "source": "./plugins/claude-code",
+      "description": "Long-term memory for Claude Code, backed by Recall AI."
+    }
+  ]
+}

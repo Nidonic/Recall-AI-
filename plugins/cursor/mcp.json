@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "recall": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@recall-ai/cli",
+        "mcp"
+      ]
+    }
+  }
+}

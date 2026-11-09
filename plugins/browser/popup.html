@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Recall AI</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header><strong>RECALL</strong><span id="ns" class="muted"></span></header>
+  <button id="save" type="button">Save this page</button>
+  <form id="search" role="search">
+    <label for="q" class="sr-only">Find in Recall</label>
+    <input id="q" type="search" placeholder="Find in Recall…" autocomplete="off" />
+  </form>
+  <p id="status" class="muted" role="status" aria-live="polite"></p>
+  <ol id="results"></ol>
+  <footer><a href="options.html" target="_blank">Settings</a></footer>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Recall AI settings</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="options">
+  <header><strong>RECALL</strong><span class="muted">settings</span></header>
+  <form id="form">
+    <label>API key <input id="apiKey" type="password" placeholder="rc_…" autocomplete="off" required /></label>
+    <label>Realm <input id="namespace" pattern="[a-zA-Z0-9_:\-]+" maxlength="255" required /></label>
+    <label>API URL <input id="baseUrl" type="url" required /></label>
+    <button type="submit">Save</button>
+    <p id="status" class="muted" role="status" aria-live="polite"></p>
+  </form>
+  <p class="muted">Get a key from the Recall console. Use the realm <code>project-&lt;repo folder&gt;</code> to share notes with your coding agents.</p>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

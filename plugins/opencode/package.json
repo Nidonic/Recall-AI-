@@ -1,0 +1,24 @@
+{
+  "name": "opencode-recall",
+  "version": "0.1.0",
+  "description": "Long-term memory for OpenCode, backed by Recall AI.",
+  "type": "module",
+  "main": "index.js",
+  "exports": "./index.js",
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "SEE LICENSE IN LICENSE",
+  "keywords": [
+    "opencode",
+    "plugin",
+    "memory",
+    "recall"
+  ],
+  "scripts": {
+    "test": "node --test index.test.js"
+  },
+  "author": "Nidonic Labs"
+}

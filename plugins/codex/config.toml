@@ -1,0 +1,5 @@
+# Append to ~/.codex/config.toml (or run `npx @recall-ai/cli setup codex`).
+# Recall's MCP server runs through the CLI and signs in with `recall login`; without a login it won't start.
+[mcp_servers.recall]
+command = "npx"
+args = ["-y", "@recall-ai/cli", "mcp"]
