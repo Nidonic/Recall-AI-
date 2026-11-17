@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/recall.mjs\" learn",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/recall.mjs\" turn_end",
             "timeout": 15,
             "async": true
           }
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/recall.mjs\" capture",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/recall.mjs\" compact",
             "timeout": 15
           }
         ]
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/recall.mjs\" capture",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/recall.mjs\" end",
             "timeout": 15
           }
         ]

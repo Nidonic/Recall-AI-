@@ -4,8 +4,8 @@
 without it (Claude Code shows "not logged in" at session start; the MCP servers won't start):
 
 ```sh
-npx @recall-ai/cli login          # opens your browser; this machine gets its own key
-npx @recall-ai/cli setup cursor   # or claude, codex, opencode: adds the Recall MCP server
+npx @tryrecallai/cli login          # opens your browser; this machine gets its own key
+npx @tryrecallai/cli setup cursor   # or claude, codex, opencode: adds the Recall MCP server
 ```
 
 The login lives in `~/.recall/config.json`; `recall logout` turns every plugin off again. `RECALL_API_KEY` overrides it
@@ -21,7 +21,7 @@ Cursor and Codex share one realm per repository. `recall connect <realm>` links 
 | [Codex](codex) | Recall tools plus an `AGENTS.md` section with the same rule | `recall setup codex`, then append `AGENTS.md` to your repo's `AGENTS.md` |
 | [Browser](browser) | Save the page (button, right-click, `Alt+Shift+S`) or a selection; find from the toolbar | `chrome://extensions` → Developer mode → Load unpacked → `plugins/browser` |
 
-MCP tools: `recall_save`, `recall_find`, `recall_about`, `recall_remove`, `recall_notes` (the earlier names
+MCP tools: `recall_save`, `recall_find`, `recall_about`, `recall_remove`, `recall_notes`, `recall_graph` (the earlier names
 `memory_add` and `memory_search` still work).
 
 ## OpenCode

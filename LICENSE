@@ -14,7 +14,7 @@ is prohibited.
 Limited install license. Nidonic Labs grants you a non-exclusive, non-transferable, revocable license to
 download and install unmodified copies of (a) the Recall AI plugins from the official public repository at
 https://github.com/Nidonic/Recall-AI- and (b) the Recall AI command-line tool and software development kit
-from the official npm packages @recall-ai/cli and @recall-ai/sdk, on your own devices and servers, and to
+from the official npm packages @tryrecallai/cli and @tryrecallai/sdk, on your own devices and servers, and to
 run them solely to access the Recall AI service at https://recallai.nidonic.online. This license does not
 permit you to modify, redistribute, sublicense, resell, or publish those copies, or to use them with any
 other service, and it grants no rights to any other part of the Software. It ends automatically if you

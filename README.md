@@ -8,7 +8,7 @@ Long-term memory for AI coding agents, by [Nidonic Labs](https://nidonic.online/
 Sign in first. Every plugin uses this login:
 
 ```sh
-npx @recall-ai/cli login
+npx @tryrecallai/cli login
 ```
 
 **Claude Code**
@@ -21,7 +21,7 @@ npx @recall-ai/cli login
 **Cursor, Codex, OpenCode**
 
 ```sh
-npx @recall-ai/cli setup cursor   # or codex, opencode
+npx @tryrecallai/cli setup cursor   # or codex, opencode
 ```
 
 [plugins/README.md](plugins/README.md) covers every plugin, including the browser extension, and what each one saves.

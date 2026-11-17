@@ -3,7 +3,7 @@
 // Recall AI's MCP server for Claude Code, over stdio: forwards each JSON-RPC line to <server>/mcp with the key from
 // `recall login` (or RECALL_API_KEY). Without a login it refuses to start, so the tools never appear unauthenticated.
 import { createInterface } from "node:readline";
-import { login, NOT_LOGGED_IN } from "./recall.mjs";
+import { login, NOT_LOGGED_IN } from "./hook.mjs";
 
 const auth = login();
 if (!auth) { process.stderr.write(`${NOT_LOGGED_IN}\n`); process.exit(1); }
