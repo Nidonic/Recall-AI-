@@ -49,7 +49,7 @@ export function realmFor(cwd = process.cwd()) {
   }
   for (let dir = start; ; dir = dirname(dir)) { // a link above the repository (e.g. in home) does not count
     const link = readJson(join(dir, ".recall.json"));
-    if (link?.realm) return { realm: String(link.realm), save: link.save !== false };
+    if (link?.realm) return { realm: String(link.realm), save: link.save !== false, repoId: repoIdFor(root) };
     if (!root || dir === root || dirname(dir) === dir) break;
   }
   const env = process.env.RECALL_REALM || process.env.RECALL_NAMESPACE;
