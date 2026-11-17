@@ -5,7 +5,7 @@ const status = (text) => { $("status").textContent = text; };
 
 settings().then((s) => {
   $("ns").textContent = s.namespace;
-  if (!s.apiKey) status("Add your API key in Settings to start.");
+  if (!s.apiKey) status("Sign in from Settings to start.");
 });
 
 $("save").addEventListener("click", async () => {

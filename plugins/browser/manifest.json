@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Recall AI",
-  "version": "0.1.0",
-  "description": "Save pages and selections to Recall AI, and find them from the toolbar.",
+  "version": "0.2.0",
+  "description": "Save pages and selections to Recall AI (private parts and secrets removed first), and find them from the toolbar.",
   "permissions": [
     "storage",
     "contextMenus",
@@ -33,5 +33,10 @@
       "description": "Save this page to Recall"
     }
   },
-  "author": "Nidonic Labs"
+  "author": "Nidonic Labs",
+  "externally_connectable": {
+    "matches": [
+      "https://recallai.nidonic.online/*"
+    ]
+  }
 }

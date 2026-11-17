@@ -62,3 +62,10 @@ test("prompt, Stop and SessionEnd: the exchange is appended once, under the sess
     assert.equal(posts.length, 1);
   } finally { server.close(); }
 });
+
+test("pause: /recall:pause stops capture until it is lifted", async () => {
+  const env = loggedOut();
+  const r = spawnSync(process.execPath, [here("./recall.mjs"), "pause", "2"], { env, encoding: "utf8" });
+  assert.match(r.stdout, /paused on this machine until/);
+  assert.match(spawnSync(process.execPath, [here("./recall.mjs"), "pause", "off"], { env, encoding: "utf8" }).stdout, /resumed/);
+});

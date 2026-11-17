@@ -3,7 +3,7 @@
 // Tools (recall_find / recall_save) come from Recall's MCP server (`recall setup opencode`).
 // Needs `recall login` (or RECALL_API_KEY); without it the plugin logs how to log in and does nothing.
 // The work is done by hook.mjs, the same core `recall hook` runs for every agent (copied from packages/cli/bin).
-import { login, NOT_LOGGED_IN, promptContext, realmFor, send, spool, startContext } from "./hook.mjs";
+import { capturing, login, NOT_LOGGED_IN, promptContext, realmFor, send, spool, startContext } from "./hook.mjs";
 
 /** A message's own text: no synthetic parts (our injections), no ignored parts, no tool output. */
 export const textOf = (parts) => parts.filter((p) => p.type === "text" && !p.synthetic && !p.ignored).map((p) => p.text).join("\n").trim();
@@ -15,8 +15,7 @@ export const RecallPlugin = async ({ client, directory }) => {
     await client?.app?.log?.({ body: { service: "recall", level: "warn", message: NOT_LOGGED_IN } }).catch(() => {});
     return {};
   }
-  const { realm, save } = realmFor(directory);
-  const capturing = () => save && (process.env.RECALL_SAVE ?? process.env.RECALL_CAPTURE) !== "off";
+  const where = realmFor(directory), { realm } = where;
   const started = new Set(); // sessions that already got About
 
   return {
@@ -39,13 +38,13 @@ export const RecallPlugin = async ({ client, directory }) => {
 
     event: async ({ event }) => {
       const id = event.properties?.sessionID ?? event.properties?.info?.id;
-      if (!id || !capturing() || !["session.idle", "session.compacted", "session.deleted"].includes(event.type)) return;
+      if (!id || !capturing(where) || !["session.idle", "session.compacted", "session.deleted"].includes(event.type)) return;
       try {
         if (event.type === "session.idle") {
           const { data } = await client.session.messages({ path: { id } });
           spool("opencode", id, (data ?? []).map(({ info, parts }) => ({ id: info.id, role: info.role === "user" ? "user" : "assistant", text: textOf(parts) })));
         }
-        await send(auth, realm, "opencode", id, { force: event.type !== "session.idle" }); // compaction or deletion: send the rest now
+        await send(auth, realm, "opencode", id, { force: event.type !== "session.idle", repoId: where.repoId }); // compaction or deletion: send the rest now
       } catch { /* kept in the spool; sent on the next idle */ }
     },
   };

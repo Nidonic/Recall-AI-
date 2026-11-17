@@ -53,8 +53,38 @@ export function realmFor(cwd = process.cwd()) {
     if (!root || dir === root || dirname(dir) === dir) break;
   }
   const env = process.env.RECALL_REALM || process.env.RECALL_NAMESPACE;
-  return { realm: env || slug(basename(root ?? start)), save: true };
+  return { realm: env || slug(basename(root ?? start)), save: true, repoId: repoIdFor(root) };
 }
+
+/** The repository's identity on every clone and machine: sha256 of its normalised origin URL, first 16 hex characters
+ *  (Supermemory's rule), or null without a remote. Saved as metadata.repo_id, so `recall doctor` can tell when one realm
+ *  receives captures from two different repositories. */
+export function repoIdFor(root) {
+  if (!root) return null;
+  let gitDir = join(root, ".git");
+  try { // a worktree's .git is a file pointing at <main>/.git/worktrees/<name>; the config is the main repository's
+    if (statSync(gitDir).isFile()) gitDir = resolve(root, /gitdir:\s*(.+)/.exec(readFileSync(gitDir, "utf8"))[1].trim());
+  } catch { return null; }
+  let config = "";
+  for (const dir of [gitDir, join(gitDir, "..", "..")]) { try { config = readFileSync(join(dir, "config"), "utf8"); break; } catch { /* next */ } }
+  const url = /\[remote "origin"\][^[]*?\burl\s*=\s*(\S+)/.exec(config)?.[1];
+  if (!url) return null;
+  const normal = url.replace(/^[a-z+]+:\/\//i, "").replace(/^[^@/]+@/, "").replace(/:(?!\d+\/)/, "/").replace(/\/+$/, "").replace(/\.git$/, "").toLowerCase();
+  return createHash("sha256").update(normal).digest("hex").slice(0, 16);
+}
+
+const pauseFile = () => join(configDir(), "state", "paused.json");
+/** Incognito: no capture on this machine until the given time (`recall pause`, `/recall:pause`). Find still works. */
+export const pausedUntil = () => { const until = Number(readJson(pauseFile())?.until ?? 0); return until > Date.now() ? until : 0; };
+/** Pauses capture for `hours` (0 resumes). Returns the end time, or 0. */
+export function pause(hours) {
+  const until = hours > 0 ? Date.now() + hours * 3_600_000 : 0;
+  mkdirSync(dirname(pauseFile()), { recursive: true });
+  if (until) writeFileSync(pauseFile(), JSON.stringify({ until })); else { try { unlinkSync(pauseFile()); } catch { /* not paused */ } }
+  return until;
+}
+/** Whether capture is on for a realm lookup: not paused, not RECALL_SAVE=off, not a `"save": false` realm. */
+export const capturing = (where) => where.save && !pausedUntil() && (process.env.RECALL_SAVE ?? process.env.RECALL_CAPTURE) !== "off";
 
 // ---------- privacy: runs before anything is written to disk or sent ----------
 const SECRETS = [
@@ -154,7 +184,7 @@ async function call(auth, realm, method, path, body, timeoutMs) {
 }
 
 /** Sends the spooled turns as one append. force: also a small batch (compaction, session end). Returns turns sent. */
-export async function send(auth, realm, host, session, { force = false, timeoutMs = 10_000 } = {}) {
+export async function send(auth, realm, host, session, { force = false, timeoutMs = 10_000, repoId = null } = {}) {
   // One send per session at a time: two overlapping ranges in flight would append their shared turns twice.
   let pending = null;
   for (const until = Date.now() + 4_000; ;) {
@@ -174,12 +204,13 @@ export async function send(auth, realm, host, session, { force = false, timeoutM
     await call(auth, realm, "POST", "/file", {
       content: formatTurns(pending), append: true, fromSeq, toSeq,
       title: `${HOST_LABEL[host] ?? host} session ${pending[0].at.slice(0, 10)}`, // kept from the first save
-      customId: `${host}:${session}`, metadata: { source: host, session },
+      customId: `${host}:${session}`, metadata: { source: host, session, ...(repoId ? { repo_id: repoId } : {}) },
     }, timeoutMs);
     withState(host, session, (state) => { // confirmed: only now does the cursor move
       state.turns = state.turns.filter((t) => t.seq > toSeq);
       state.seq = Math.max(state.seq ?? 0, toSeq);
       state.lastSent = pending.at(-1);
+      Object.assign(state, { realm, repoId }); // `recall doctor`: one realm fed by two repositories is a warning
     });
   } finally {
     withState(host, session, (state) => { delete state.inflight; });
@@ -273,6 +304,21 @@ const HOSTS = {
     inject: (event, text) => event === "start" && { additionalContext: text }, perPrompt: false,
     detach: ["turn_end", "compact", "end"],
   },
+  // Windsurf / Devin: Stop carries neither the reply nor a transcript, so only the user's prompts are saved.
+  devin: claudeStyle({ start: "SessionStart", prompt: "UserPromptSubmit" }, {
+    cwd: (i) => i.cwd ?? process.env.DEVIN_PROJECT_DIR, reply: () => undefined, transcript: () => undefined,
+    detach: ["turn_end", "compact", "end"],
+  }),
+  // Factory Droid: Stop has no reply field; it is read from transcript_path (JSONL).
+  factory: claudeStyle({ start: "SessionStart", prompt: "UserPromptSubmit" }, { reply: () => undefined, detach: ["turn_end", "compact", "end"] }),
+  qwen: claudeStyle({ start: "SessionStart", prompt: "UserPromptSubmit" }, { detach: ["compact", "end"] }), // Stop runs async
+  // Kiro: plain stdout becomes context; the prompt also comes as USER_PROMPT; Stop has no reply, so prompts only.
+  kiro: {
+    session: (i) => i.session_id ?? i.sessionId, cwd: (i) => i.cwd, prompt: (i) => i.prompt ?? process.env.USER_PROMPT,
+    reply: () => undefined, transcript: () => undefined, skip: () => false,
+    inject: (event, text) => (event === "start" || event === "prompt") && text, perPrompt: true, loggedOut: NOT_LOGGED_IN,
+    detach: ["turn_end", "compact", "end"],
+  },
 };
 export const HOST_NAMES = Object.keys(HOSTS);
 const LEGACY = { learn: "turn_end", capture: "end" }; // event names of the earlier Claude Code plugin
@@ -294,10 +340,10 @@ export async function handle(host, event, input, auth = login()) {
   event = LEGACY[event] ?? event;
   const quiet = h.answers?.[event] ?? h.quiet ?? null; // what the host needs to hear when there is nothing to add
   if (!auth) return event === "start" ? h.loggedOut ?? quiet : quiet;
-  const session = h.session(input), { realm, save } = realmFor(h.cwd(input) || process.cwd());
-  const capturing = save && (process.env.RECALL_SAVE ?? process.env.RECALL_CAPTURE) !== "off" && session && !h.skip(input);
+  const session = h.session(input), where = realmFor(h.cwd(input) || process.cwd()), { realm } = where;
+  const on = capturing(where) && session && !h.skip(input);
   const prompt = String(h.prompt(input) ?? "");
-  const userText = capturing && prompt && !/^\s*<task-notification>/.test(prompt) && !prompt.trim().startsWith("/") ? [{ role: "user", text: prompt }] : [];
+  const userText = on && prompt && !/^\s*<task-notification>/.test(prompt) && !prompt.trim().startsWith("/") ? [{ role: "user", text: prompt }] : [];
 
   if (event === "start") {
     prune(host);
@@ -309,7 +355,7 @@ export async function handle(host, event, input, auth = login()) {
     const notes = h.perPrompt && session ? await promptContext(auth, realm, host, session, prompt) : null;
     return (notes && h.inject(event, notes)) || quiet;
   }
-  if (!capturing) return quiet;
+  if (!on) return quiet;
   if (event === "turn_end") {
     let reply = h.reply(input);
     const transcript = h.transcript(input);
@@ -319,7 +365,7 @@ export async function handle(host, event, input, auth = login()) {
   }
   if (["turn_end", "compact", "end", "flush"].includes(event)) {
     const force = event === "flush" ? Boolean(input._force) : event !== "turn_end";
-    if (!(h.detach.includes(event) && detachFlush(event, input, force))) await send(auth, realm, host, session, { force });
+    if (!(h.detach.includes(event) && detachFlush(event, input, force))) await send(auth, realm, host, session, { force, repoId: where.repoId });
   }
   return quiet;
 }
@@ -331,7 +377,7 @@ export async function runHook(host, event) {
   try { input = JSON.parse(process.env.RECALL_HOOK_INPUT || readFileSync(0, "utf8") || "{}"); } catch { /* no stdin */ }
   try {
     const out = await handle(host, event, input);
-    if (out) process.stdout.write(JSON.stringify(out));
+    if (out) process.stdout.write(typeof out === "string" ? out : JSON.stringify(out)); // Kiro reads plain text
   } catch (err) { process.stderr.write(`recall: ${err.message}\n`); }
 }
 

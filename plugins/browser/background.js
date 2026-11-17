@@ -1,4 +1,4 @@
-import { readTab, savePage, saveSelection } from "./recall.js";
+import { acceptSignIn, readTab, savePage, saveSelection } from "./recall.js";
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({ id: "selection", title: "Save selection to Recall", contexts: ["selection"] });
@@ -23,6 +23,13 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (!tab?.id) return;
   if (info.menuItemId === "selection") report(saveSelection({ title: tab.title, url: tab.url ?? "", text: info.selectionText ?? "" }));
   else report(readTab(tab.id).then(savePage));
+});
+
+// The console's sign-in answer. Only the Recall site can send here (manifest: externally_connectable).
+chrome.runtime.onMessageExternal.addListener((message, sender, respond) => {
+  if (message?.type !== "recall-login") return false;
+  acceptSignIn(message, sender.origin).then(respond, () => respond({ ok: false }));
+  return true; // answers asynchronously
 });
 
 chrome.commands.onCommand.addListener((command, tab) => {

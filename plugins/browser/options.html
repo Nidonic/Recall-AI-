@@ -7,6 +7,7 @@
 </head>
 <body class="options">
   <header><strong>RECALL</strong><span class="muted">settings</span></header>
+  <p><button id="signin" type="button">Sign in with Recall</button> <span class="muted">or paste a key below</span></p>
   <form id="form">
     <label>API key <input id="apiKey" type="password" placeholder="rc_…" autocomplete="off" required /></label>
     <label>Realm <input id="namespace" pattern="[a-zA-Z0-9_:\-]+" maxlength="255" required /></label>
@@ -14,7 +15,7 @@
     <button type="submit">Save</button>
     <p id="status" class="muted" role="status" aria-live="polite"></p>
   </form>
-  <p class="muted">Get a key from the Recall console. Use the realm <code>project-&lt;repo folder&gt;</code> to share notes with your coding agents.</p>
+  <p class="muted">Sign in opens the Recall console, which gives this browser its own key (revoke it there any time). Or get a key from the console yourself. Use the realm <code>project-&lt;repo folder&gt;</code> to share notes with your coding agents.</p>
   <script type="module" src="options.js"></script>
 </body>
 </html>

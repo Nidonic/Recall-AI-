@@ -18,10 +18,11 @@ npx @tryrecallai/cli login
 /plugin install recall@recall-ai
 ```
 
-**Codex, Gemini CLI, Cursor, Copilot, OpenCode**
+**Every other agent** (Codex, Gemini CLI, Qwen Code, Factory, OpenCode, Cline, Amp, Cursor, Copilot, Windsurf, Kiro)
 
 ```sh
-npx @tryrecallai/cli setup codex   # or gemini, cursor, copilot, opencode: MCP server + capture hooks
+npx @tryrecallai/cli setup --all   # every agent found on this machine; or: setup codex, setup cline, ...
+npx @tryrecallai/cli doctor        # check that capture works, agent by agent
 ```
 
 [plugins/README.md](plugins/README.md) covers every plugin, including the browser extension, and what each one saves.
