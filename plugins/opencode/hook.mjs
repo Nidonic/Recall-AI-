@@ -1,15 +1,18 @@
 // Recall AI agent hooks: one core for every coding agent. Copyright © 2026 Nidonic Labs. All rights reserved.
-// Shell-hook agents run `recall hook --host <host> <event>` (or the plugin's copy of this file) with the agent's JSON on
-// stdin; in-process plugins (OpenCode) import it. Events: start (inject About), prompt (Find + spool the user's text),
-// turn_end (spool the reply, send new turns), compact and end (send what is spooled).
+// Shell-hook agents (Claude Code, Codex, Gemini CLI, Cursor, Copilot) run `recall hook --host <host> <event>`,
+// `node hook.mjs <host> <event>` or a plugin's copy, with the agent's JSON on stdin; in-process plugins (OpenCode)
+// import it. Events: start (inject About), prompt (Find + spool the user's text), turn_end (spool the reply, send new
+// turns), compact and end (send what is spooled), flush (a detached send, for agents that wait on their hooks).
 // Capture sends only new turns, appended to one file per session (customId "<host>:<session>", a turn range), and the
 // cursor moves only after the server confirmed them. A timeout keeps them for the next send; the server answers a
 // replayed range without work or charge. Never blocks the agent: every error ends quietly.
 // Zero dependencies: copied verbatim into plugins/claude-code/scripts and plugins/opencode (test/hook-copies checks).
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 export const DEFAULT_BASE = "https://recallai.nidonic.online";
 export const NOT_LOGGED_IN = "Recall AI is off: you are not logged in. Run `npx @tryrecallai/cli login` in a terminal, then start a new session.";
@@ -137,7 +140,7 @@ export function spool(host, session, messages) {
 }
 
 const hash = (text) => createHash("sha256").update(String(text).trim().toLowerCase()).digest("hex").slice(0, 24);
-const HOST_LABEL = { "claude-code": "Claude Code", opencode: "OpenCode", codex: "Codex" };
+const HOST_LABEL = { "claude-code": "Claude Code", opencode: "OpenCode", codex: "Codex", gemini: "Gemini CLI", cursor: "Cursor", copilot: "Copilot" };
 export const formatTurns = (turns) => turns.map((t) => `### ${t.role === "user" ? "User" : "Assistant"} · ${t.at}\n${t.text}`).join("\n\n");
 
 async function call(auth, realm, method, path, body, timeoutMs) {
@@ -222,70 +225,117 @@ export async function promptContext(auth, realm, host, session, prompt) {
   return notes.length ? wrap(`Relevant notes from Recall ("${realm}"). ${STORED_DATA}\n${notes.map((n) => `- ${n}`).join("\n")}`) : null;
 }
 
-/** The last reply in a Claude Code transcript (JSONL): assistant text after the last real user message. Used only when
- *  the hook input has no last_assistant_message (the transcript can lag the turn that just ended). */
+/** The last reply in a transcript (JSONL): assistant text after the last user message. Only a fallback, for hosts whose
+ *  turn-end hook carries no reply (Copilot) or when it is missing; the transcript can lag the turn that just ended.
+ *  Reads Claude Code lines ({type: "user"|"assistant", message: {content}}) and event logs ({type: "user.message"|
+ *  "assistant.message", data: {content}}).
+ *  shortcut: Copilot's transcript format is undocumented, so this is a tolerant guess; without a match only the user's
+ *  text is saved. Replace with a real parser once its schema is published. */
 export function lastReply(jsonl) {
   let reply = [];
   for (const line of String(jsonl).split("\n")) {
     let e;
     try { e = JSON.parse(line); } catch { continue; }
-    if (e.isMeta || e.isSidechain) continue;
-    const content = e.message?.content;
-    const text = typeof content === "string" ? content : Array.isArray(content) ? content.filter((p) => p.type === "text").map((p) => p.text).join("\n") : "";
-    if (e.type === "user" && text) reply = [];
-    else if (e.type === "assistant" && text) reply.push(text);
+    if (!e || e.isMeta || e.isSidechain || /delta|tool/i.test(String(e.type))) continue;
+    const role = /^user(\.|$)/.test(e.type) ? "user" : /^assistant(\.|$)/.test(e.type) ? "assistant" : null;
+    const content = e.message?.content ?? e.data?.content ?? e.content;
+    const text = typeof content === "string" ? content : Array.isArray(content) ? content.filter((p) => p?.type === "text").map((p) => p.text).join("\n") : "";
+    if (role === "user" && text) reply = [];
+    else if (role === "assistant" && text) reply.push(text);
   }
   return reply.join("\n");
 }
 
-// ---------- shell hosts: field names per host; the policy above is shared ----------
+// ---------- shell hosts: how each one names things; the policy above is shared ----------
+// detach: events whose hook the agent waits for (and Codex's 1–3 s SessionEnd), so the send runs in a detached process.
+// perPrompt: false where the prompt hook cannot add context (Cursor, Copilot): Find comes from the MCP tool instead.
+const claudeStyle = (names, more = {}) => ({
+  session: (i) => i.session_id, cwd: (i) => i.cwd, prompt: (i) => i.prompt, reply: (i) => i.last_assistant_message,
+  transcript: (i) => i.transcript_path, skip: (i) => Boolean(i.agent_id), // a subagent's turns are its parent's business
+  inject: (event, text) => names[event] && { hookSpecificOutput: { hookEventName: names[event], additionalContext: text } },
+  loggedOut: { systemMessage: NOT_LOGGED_IN }, perPrompt: true, detach: [], ...more,
+});
 const HOSTS = {
-  "claude-code": {
-    session: "session_id", prompt: "prompt", reply: "last_assistant_message", transcript: "transcript_path",
-    output: { start: "SessionStart", prompt: "UserPromptSubmit" },
-    skip: (input) => Boolean(input.agent_id), // a subagent's turns are its parent's business
+  "claude-code": claudeStyle({ start: "SessionStart", prompt: "UserPromptSubmit" }),
+  codex: claudeStyle({ start: "SessionStart", prompt: "UserPromptSubmit" }, { detach: ["end"] }),
+  gemini: claudeStyle({ start: "SessionStart", prompt: "BeforeAgent" }, { // AfterAgent carries prompt + prompt_response
+    reply: (i) => i.prompt_response, detach: ["turn_end", "compact", "end"], quiet: {}, // stdout must always be JSON
+  }),
+  cursor: {
+    session: (i) => i.conversation_id ?? i.session_id, cwd: (i) => i.workspace_roots?.[0] ?? i.cwd, prompt: (i) => i.prompt,
+    reply: (i) => i.text, transcript: (i) => i.transcript_path, skip: () => false,
+    inject: (event, text) => event === "start" && { additional_context: text }, perPrompt: false,
+    detach: ["turn_end", "compact", "end"], answers: { prompt: { continue: true } }, // beforeSubmitPrompt must allow the prompt
+  },
+  copilot: {
+    session: (i) => i.sessionId ?? i.session_id, cwd: (i) => i.cwd, prompt: (i) => i.prompt, reply: () => undefined,
+    transcript: (i) => i.transcriptPath ?? i.transcript_path, skip: (i) => Boolean(i.agentId ?? i.agent_id),
+    inject: (event, text) => event === "start" && { additionalContext: text }, perPrompt: false,
+    detach: ["turn_end", "compact", "end"],
   },
 };
+export const HOST_NAMES = Object.keys(HOSTS);
 const LEGACY = { learn: "turn_end", capture: "end" }; // event names of the earlier Claude Code plugin
+
+/** Re-runs this hook command as a detached `flush` (the event is the command's last argument), so the agent never waits
+ *  on the network. False when the command line doesn't end with the event (then the caller sends inline). */
+function detachFlush(event, input, force) {
+  if (process.env.RECALL_HOOK_INLINE === "1" || process.argv.at(-1) !== event) return false;
+  spawn(process.execPath, [...process.argv.slice(1, -1), "flush"], {
+    detached: true, stdio: "ignore", windowsHide: true, env: { ...process.env, RECALL_HOOK_INPUT: JSON.stringify({ ...input, _force: force }) },
+  }).unref();
+  return true;
+}
 
 /** One hook call. Returns what to print on stdout (or null). */
 export async function handle(host, event, input, auth = login()) {
   const h = HOSTS[host];
-  if (!h) throw new Error(`unknown host "${host}"`);
+  if (!h) throw new Error(`unknown host "${host}" (known: ${HOST_NAMES.join(", ")})`);
   event = LEGACY[event] ?? event;
-  if (!auth) return event === "start" ? { systemMessage: NOT_LOGGED_IN } : null;
-  const session = input[h.session], { realm, save } = realmFor(input.cwd || process.cwd());
+  const quiet = h.answers?.[event] ?? h.quiet ?? null; // what the host needs to hear when there is nothing to add
+  if (!auth) return event === "start" ? h.loggedOut ?? quiet : quiet;
+  const session = h.session(input), { realm, save } = realmFor(h.cwd(input) || process.cwd());
   const capturing = save && (process.env.RECALL_SAVE ?? process.env.RECALL_CAPTURE) !== "off" && session && !h.skip(input);
-  const inject = (text) => text && { hookSpecificOutput: { hookEventName: h.output[event], additionalContext: text } };
+  const prompt = String(h.prompt(input) ?? "");
+  const userText = capturing && prompt && !/^\s*<task-notification>/.test(prompt) && !prompt.trim().startsWith("/") ? [{ role: "user", text: prompt }] : [];
 
   if (event === "start") {
     prune(host);
     if (session && input.source === "compact") withState(host, session, (s) => { s.shown = []; }); // compaction removed them from context
-    return inject(await startContext(auth, realm));
+    return h.inject(event, await startContext(auth, realm)) || quiet;
   }
   if (event === "prompt") {
-    const prompt = input[h.prompt] ?? "";
-    if (capturing && !/^\s*<task-notification>/.test(prompt) && !prompt.trim().startsWith("/")) spool(host, session, [{ role: "user", text: prompt }]);
-    return inject(session ? await promptContext(auth, realm, host, session, prompt) : null);
+    if (userText.length) spool(host, session, userText);
+    const notes = h.perPrompt && session ? await promptContext(auth, realm, host, session, prompt) : null;
+    return (notes && h.inject(event, notes)) || quiet;
   }
-  if (!capturing) return null;
+  if (!capturing) return quiet;
   if (event === "turn_end") {
-    let reply = input[h.reply];
-    if (reply == null && input[h.transcript]) { try { reply = lastReply(readFileSync(input[h.transcript], "utf8")); } catch { reply = ""; } }
-    if (reply) spool(host, session, [{ role: "assistant", text: reply }]);
-    await send(auth, realm, host, session);
-  } else if (event === "compact" || event === "end") {
-    await send(auth, realm, host, session, { force: true });
+    let reply = h.reply(input);
+    const transcript = h.transcript(input);
+    if (reply == null && transcript) { try { reply = lastReply(readFileSync(transcript, "utf8")); } catch { reply = ""; } }
+    // A turn end that also carries the prompt (Gemini's AfterAgent): spooled again, it is dropped as a repeat.
+    spool(host, session, [...userText, ...(reply ? [{ role: "assistant", text: reply }] : [])]);
   }
-  return null;
+  if (["turn_end", "compact", "end", "flush"].includes(event)) {
+    const force = event === "flush" ? Boolean(input._force) : event !== "turn_end";
+    if (!(h.detach.includes(event) && detachFlush(event, input, force))) await send(auth, realm, host, session, { force });
+  }
+  return quiet;
 }
 
-/** `recall hook --host <host> <event>` and the plugins' scripts: stdin JSON in, hook JSON out, always exit 0. */
+/** `recall hook --host <host> <event>`, `node hook.mjs <host> <event>` and the plugins' scripts: stdin JSON in, hook
+ *  JSON out, always exit 0. A detached flush gets its input from RECALL_HOOK_INPUT instead. */
 export async function runHook(host, event) {
   let input = {};
-  try { input = JSON.parse(readFileSync(0, "utf8") || "{}"); } catch { /* no stdin */ }
+  try { input = JSON.parse(process.env.RECALL_HOOK_INPUT || readFileSync(0, "utf8") || "{}"); } catch { /* no stdin */ }
   try {
     const out = await handle(host, event, input);
     if (out) process.stdout.write(JSON.stringify(out));
   } catch (err) { process.stderr.write(`recall: ${err.message}\n`); }
+}
+
+// `node ~/.recall/bin/hook.mjs <host> <event>`: the copy `recall setup` installs for Codex, Gemini CLI, Cursor and Copilot.
+if (process.argv[1] && basename(process.argv[1]) === "hook.mjs" && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  await runHook(process.argv[2], process.argv[3]);
 }

@@ -1,6 +1,6 @@
 {
   "name": "opencode-recall",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Long-term memory for OpenCode, backed by Recall AI.",
   "type": "module",
   "main": "index.js",

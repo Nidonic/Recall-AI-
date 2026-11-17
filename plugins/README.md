@@ -5,7 +5,7 @@ without it (Claude Code shows "not logged in" at session start; the MCP servers 
 
 ```sh
 npx @tryrecallai/cli login          # opens your browser; this machine gets its own key
-npx @tryrecallai/cli setup cursor   # or claude, codex, opencode: adds the Recall MCP server
+npx @tryrecallai/cli setup cursor   # or claude, codex, gemini, copilot, opencode: MCP server + capture hooks
 ```
 
 The login lives in `~/.recall/config.json`; `recall logout` turns every plugin off again. `RECALL_API_KEY` overrides it
@@ -17,8 +17,10 @@ Cursor and Codex share one realm per repository. `recall connect <realm>` links 
 | --- | --- | --- |
 | [Claude Code](claude-code) | Brings in what Recall knows at session start and relevant notes with each prompt; keeps learning by saving the conversation in the background as it grows; adds the Recall tools and `/recall:remember`, `/recall:recall` | `/plugin marketplace add Nidonic/Recall-AI-`, then `/plugin install recall@recall-ai` |
 | [OpenCode](opencode) | Brings in what Recall knows and relevant notes with each message; keeps learning by saving after each reply as the conversation grows | see below |
-| [Cursor](cursor) | Recall tools plus an always-on rule telling the agent when to find and save | `recall setup cursor`, then copy `recall.mdc` to `.cursor/rules/` |
-| [Codex](codex) | Recall tools plus an `AGENTS.md` section with the same rule | `recall setup codex`, then append `AGENTS.md` to your repo's `AGENTS.md` |
+| [Codex](codex) | Brings in what Recall knows at session start and relevant notes with each prompt; saves the conversation turn by turn (hooks in `~/.codex/hooks.json`); Recall tools | `recall setup codex`, then approve the hooks once with `/hooks` in Codex |
+| Gemini CLI | Same as Codex: About at session start, notes with each prompt, turn-by-turn saving (hooks and MCP in `~/.gemini/settings.json`) | `recall setup gemini` |
+| [Cursor](cursor) | About at session start and turn-by-turn saving (`~/.cursor/hooks.json`); Cursor's prompt hook can't add context, so the agent finds notes with the Recall tools; optional always-on rule | `recall setup cursor`; optionally copy `recall.mdc` to `.cursor/rules/` |
+| Copilot (CLI) | About at session start and turn-by-turn saving (`~/.copilot/hooks/recall.json`); notes through the Recall tools, as on Cursor. Copilot hooks are in preview | `recall setup copilot` |
 | [Browser](browser) | Save the page (button, right-click, `Alt+Shift+S`) or a selection; find from the toolbar | `chrome://extensions` → Developer mode → Load unpacked → `plugins/browser` |
 
 MCP tools: `recall_save`, `recall_find`, `recall_about`, `recall_remove`, `recall_notes`, `recall_graph` (the earlier names
@@ -27,7 +29,8 @@ MCP tools: `recall_save`, `recall_find`, `recall_about`, `recall_remove`, `recal
 ## OpenCode
 
 `recall setup opencode` adds the MCP server to `~/.config/opencode/opencode.json`. To bring in and save notes
-automatically, copy `opencode/index.js` to `.opencode/plugin/recall.js` (until `opencode-recall` is published to npm).
+automatically, copy `opencode/index.js` to `.opencode/plugin/recall.js` and `opencode/hook.mjs` next to it, as
+`.opencode/plugin/hook.mjs` (until `opencode-recall` is published to npm).
 
 ## Privacy
 
